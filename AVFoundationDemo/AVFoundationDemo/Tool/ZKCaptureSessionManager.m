@@ -19,6 +19,8 @@
 
 @end
 
+static char * ExposureValueChange;
+
 @implementation ZKCaptureSessionManager
 #pragma mark - 设置会话
 /*
@@ -166,7 +168,7 @@
 }
 
 //当前摄像头的个数
-- (NSInteger)cameraCount{
+- (NSUInteger)cameraCount{
     return [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo].count;
 }
 
@@ -179,6 +181,128 @@
         }
     }
     return nil;
+}
+
+#pragma mark - 聚焦 
+- (BOOL)cameraSupportsTapToFocus{
+    //询问激活中的摄像头是否支持兴趣点聚焦
+    return [[self activeCamera] isFocusPointOfInterestSupported];
+}
+
+- (void)focusAtPoint:(CGPoint)point{
+    AVCaptureDevice * ac_device = [self activeCamera];
+    //是否支持兴趣点对焦 && 是否自动聚焦模式
+    if (ac_device.isFocusPointOfInterestSupported&&[ac_device isFocusModeSupported:AVCaptureFocusModeAutoFocus]) {
+        NSError * error;
+        //锁定设备
+        if ([ac_device lockForConfiguration:&error]) {
+            ac_device.focusPointOfInterest = point;
+            ac_device.focusMode = AVCaptureFocusModeAutoFocus;
+            //释放该锁定
+            [ac_device unlockForConfiguration];
+        }else{
+            //错误时,则返回给错误处理代理
+            if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+                [self.delegate deviceConfigurationFailedWithError:error];
+            }
+        }
+    }
+}
+
+#pragma mark - 曝光 
+- (BOOL)cameraSupportsTapToExpose{
+    //询问激活的摄像头是否支持兴趣点曝光
+    return [[self activeCamera] isExposurePointOfInterestSupported];
+}
+
+- (void)exposeAtPoint:(CGPoint)point{
+    AVCaptureDevice * ac_device = [self activeCamera];
+    if (ac_device.isExposurePointOfInterestSupported&&[ac_device isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
+        NSError * error;
+        //锁定设备
+        if ([ac_device lockForConfiguration:&error]) {
+            ac_device.exposurePointOfInterest = point;
+            ac_device.exposureMode = AVCaptureExposureModeContinuousAutoExposure;
+            if ([ac_device isExposureModeSupported:AVCaptureExposureModeLocked]) {
+                [ac_device addObserver:self
+                            forKeyPath:@"adjustingExposure"
+                               options:NSKeyValueObservingOptionNew
+                               context:ExposureValueChange];
+            }
+            [ac_device unlockForConfiguration];
+        }else{
+            if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+                [self.delegate deviceConfigurationFailedWithError:error];
+            }
+        }
+    }
+}
+
+#pragma mark - 重置聚焦 曝光的方法
+- (void)resetFocusAndExposureModes{
+    AVCaptureDevice * ac_device = [self activeCamera];
+    
+    AVCaptureFocusMode focusMode = AVCaptureFocusModeAutoFocus;
+    BOOL canResetFocus = ac_device.isFocusPointOfInterestSupported&&[ac_device isFocusModeSupported:focusMode];
+    
+    AVCaptureExposureMode exposureMode = AVCaptureExposureModeContinuousAutoExposure;
+    BOOL canResetExposure = ac_device.isExposurePointOfInterestSupported&&[ac_device isExposureModeSupported:exposureMode];
+    CGPoint centerPoint = CGPointMake(0.5f, 0.5f);
+    NSError * error;
+    
+    //锁定设备
+    if ([ac_device lockForConfiguration:&error]) {
+        //聚焦可以设置,设置聚焦
+        if (canResetFocus) {
+            ac_device.focusMode = focusMode;
+            ac_device.focusPointOfInterest = centerPoint;
+        }
+        //曝光度可以设置,设置曝光度
+        if (canResetExposure) {
+            ac_device.exposureMode = exposureMode;
+            ac_device.exposurePointOfInterest = centerPoint;
+        }
+        
+        //解锁设备
+        [ac_device unlockForConfiguration];
+    }else{
+        if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+            [self.delegate deviceConfigurationFailedWithError:error];
+        }
+    }
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context{
+    if (context == ExposureValueChange) {
+        AVCaptureDevice * ac_device = [self activeCamera];
+        if (ac_device.isAdjustingExposure&&[ac_device isExposureModeSupported:AVCaptureExposureModeLocked]) {
+            [object removeObserver:self
+                        forKeyPath:@"adjustingExposure"
+                           context:ExposureValueChange];
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSError * error;
+                if ([ac_device lockForConfiguration:&error]) {
+                    ac_device.exposureMode = AVCaptureExposureModeLocked;
+                    [ac_device unlockForConfiguration];
+                }else{
+                    if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+                        [self.delegate deviceConfigurationFailedWithError:error];
+                    }
+                }
+            });
+        }
+    }
+}
+
+#pragma mark - 闪光灯
+- (BOOL)cameraHasFlash{
+    return YES;
+}
+
+#pragma mark - 手电筒
+- (BOOL)cameraHasTorch{
+    return YES;
 }
 
 @end

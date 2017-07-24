@@ -36,17 +36,21 @@
 @interface ZKCaptureSessionManager : NSObject
 @property (nonatomic, weak) id <ZKCaptureSessionManagerDelegate> delegate;
 @property (nonatomic, strong, readonly) AVCaptureSession * captureSession;
-
-
-- (BOOL)setUpSession:(NSError **)error;
-
+- (BOOL)setUpSession:(NSError **)error;//设置捕捉会话
 - (void)startSession;
-
 - (void)stopSession;
 
-@property (nonatomic, readonly) NSInteger cameraCount; //摄像头个数
-
+@property (nonatomic, readonly) NSUInteger cameraCount;        //摄像头个数
+@property (nonatomic, readonly) BOOL cameraHasTorch;           //手电筒
+@property (nonatomic, readonly) BOOL cameraHasFlash;           //闪光灯
+@property (nonatomic, readonly) BOOL cameraSupportsTapToFocus; //聚焦
+@property (nonatomic, readonly) BOOL cameraSupportsTapToExpose;//曝光
+@property (nonatomic) AVCaptureTorchMode torchMode;            //手电筒模式
+@property (nonatomic) AVCaptureFlashMode flashMode;            //闪光灯模式
 - (BOOL)switchCameras; //切换摄像头
 
+- (void)focusAtPoint:(CGPoint)point;  //聚焦
+- (void)exposeAtPoint:(CGPoint)point; //曝光
+- (void)resetFocusAndExposureModes;   //重置聚焦 曝光的方法
 
 @end
