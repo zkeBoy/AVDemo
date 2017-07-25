@@ -24,8 +24,11 @@
  6.捕捉设备的预览 AVCaptureVideoPreviewLayer
  */
 
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+
+static NSString * THThumbnailCreatedNotification = @"THThumbnailCreated";
+
 //处理一些列错误的代理
 @protocol ZKCaptureSessionManagerDelegate <NSObject>
 - (void)deviceConfigurationFailedWithError:(NSError *)error; //切换摄像头出错
@@ -52,5 +55,12 @@
 - (void)focusAtPoint:(CGPoint)point;  //聚焦
 - (void)exposeAtPoint:(CGPoint)point; //曝光
 - (void)resetFocusAndExposureModes;   //重置聚焦 曝光的方法
+
+- (void)captureStillImage;  //捕捉静态图片
+
+- (void)startRecording;     //开始录制视频
+- (void)stopRecording;      //停止录制视频
+- (BOOL)isRecording;        //获取录制状态
+- (CMTime)recordedDuration; //录制时间
 
 @end

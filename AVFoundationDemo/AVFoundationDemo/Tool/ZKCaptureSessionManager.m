@@ -7,8 +7,14 @@
 //
 
 #import "ZKCaptureSessionManager.h"
+#ifdef NSFoundationVersionNumber_iOS_8_0
+#import <Photos/Photos.h>
+#else
+#import <AssetsLibrary/AssetsLibrary.h>
+#endif
+#import "NSFileManager+THAdditions.h"
 
-@interface ZKCaptureSessionManager ()
+@interface ZKCaptureSessionManager ()<AVCaptureFileOutputRecordingDelegate>
 
 @property (nonatomic, strong) dispatch_queue_t   videoQueue;
 @property (nonatomic, strong) AVCaptureSession * captureSession;       //捕捉会话
@@ -19,7 +25,7 @@
 
 @end
 
-static char * ExposureValueChange;
+static const NSString * ThCameraAdjustingExposureContext;
 
 @implementation ZKCaptureSessionManager
 #pragma mark - 设置会话
@@ -227,8 +233,9 @@ static char * ExposureValueChange;
                 [ac_device addObserver:self
                             forKeyPath:@"adjustingExposure"
                                options:NSKeyValueObservingOptionNew
-                               context:ExposureValueChange];
+                               context:&ThCameraAdjustingExposureContext];
             }
+            //解锁设备
             [ac_device unlockForConfiguration];
         }else{
             if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
@@ -273,12 +280,12 @@ static char * ExposureValueChange;
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context{
-    if (context == ExposureValueChange) {
+    if (context == &ThCameraAdjustingExposureContext) {
         AVCaptureDevice * ac_device = [self activeCamera];
-        if (ac_device.isAdjustingExposure&&[ac_device isExposureModeSupported:AVCaptureExposureModeLocked]) {
+        if (!ac_device.isAdjustingExposure&&[ac_device isExposureModeSupported:AVCaptureExposureModeLocked]) {
             [object removeObserver:self
                         forKeyPath:@"adjustingExposure"
-                           context:ExposureValueChange];
+                           context:&ThCameraAdjustingExposureContext];
             
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSError * error;
@@ -297,12 +304,237 @@ static char * ExposureValueChange;
 
 #pragma mark - 闪光灯
 - (BOOL)cameraHasFlash{
-    return YES;
+    return [[self activeCamera] hasFlash];
+}
+
+//get
+- (AVCaptureFlashMode)flashMode{
+    return [[self activeCamera] flashMode];
+}
+
+//set
+- (void)setFlashMode:(AVCaptureFlashMode)flashMode{
+    AVCaptureDevice * ac_device = [self activeCamera];
+    if ([ac_device isFlashModeSupported:flashMode]) {
+        NSError * error;
+        if ([ac_device lockForConfiguration:&error]) {
+            ac_device.flashMode = flashMode;
+            [ac_device unlockForConfiguration];
+        }else{
+            if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+                [self.delegate deviceConfigurationFailedWithError:error];
+            }
+        }
+    }
 }
 
 #pragma mark - 手电筒
 - (BOOL)cameraHasTorch{
-    return YES;
+    return [[self activeCamera] hasTorch];
+}
+
+//get
+- (AVCaptureTorchMode)torchMode{
+    return [[self activeCamera] torchMode];
+}
+
+//set
+- (void)setTorchMode:(AVCaptureTorchMode)torchMode{
+    AVCaptureDevice * ac_device = [self activeCamera];
+    if ([ac_device isTorchModeSupported:torchMode]) {
+        NSError * error;
+        if ([ac_device lockForConfiguration:&error]) {
+            ac_device.torchMode = torchMode;
+            [ac_device unlockForConfiguration];
+        }else{
+            if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+                [self.delegate deviceConfigurationFailedWithError:error];
+            }
+        }
+    }
+}
+
+#pragma mark - 捕捉静态图片
+- (void)captureStillImage{
+    AVCaptureConnection * connection = [self.imageOutput connectionWithMediaType:AVMediaTypeVideo];
+    
+    //程序只支持纵向,但用户横向拍照时,需要调整结果照片的方向
+    //判断是否支持设置视频方向
+    if (connection.isVideoOrientationSupported) {
+        connection.videoOrientation = [self currentVideoOrientation];
+    }
+    [self.imageOutput captureStillImageAsynchronouslyFromConnection:connection completionHandler:^(CMSampleBufferRef imageDataSampleBuffer, NSError *error) {
+        if (imageDataSampleBuffer != NULL) {
+            NSData * imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:imageDataSampleBuffer];
+            UIImage * image = [[UIImage alloc] initWithData:imageData];
+            [self writeImageToAssetsLibrary:image];
+        }else{
+            NSLog(@"create image Fail:%@",[error localizedDescription]);
+        }
+    }];
+}
+
+//获取方向
+- (AVCaptureVideoOrientation)currentVideoOrientation{
+    AVCaptureVideoOrientation orientation;
+    switch ([UIDevice currentDevice].orientation) {
+        case UIDeviceOrientationPortrait:
+            orientation = AVCaptureVideoOrientationPortrait;
+            break;
+        case UIDeviceOrientationLandscapeLeft:
+            orientation = AVCaptureVideoOrientationLandscapeLeft;
+            break;
+        case UIDeviceOrientationLandscapeRight:
+            orientation = AVCaptureVideoOrientationLandscapeRight;
+            break;
+        default:
+            orientation = AVCaptureVideoOrientationPortraitUpsideDown;
+            break;
+    }
+    return orientation;
+}
+
+- (void)writeImageToAssetsLibrary:(UIImage *)image{
+#ifdef NSFoundationVersionNumber_iOS_8_0
+    [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+        [PHAssetChangeRequest creationRequestForAssetFromImage:image];
+    } completionHandler:^(BOOL success, NSError * _Nullable error) {
+        if(success){
+            //发送通知
+            [self postNotifictionWithObject:image];
+        }else{
+            //保存失败
+            NSLog(@"save image to camera fail:%@",[error localizedDescription]);
+            //代理回掉
+        }
+    }];
+#else
+    ALAssetsLibrary * library = [[ALAssetsLibrary alloc] init];
+    [library writeImageToSavedPhotosAlbum:image.CGImage
+                              orientation:(NSUInteger)image.imageOrientation
+                          completionBlock:^(NSURL *assetURL, NSError *error) {
+                              if (!error) {
+                                  //success
+                                  [self postNotifictionWithObject:image];
+                              }else{
+                                  //fail
+                                  NSLog(@"save image to camera fail:%@",[error localizedDescription]);
+                              }
+                          }];
+#endif
+}
+
+- (void)postNotifictionWithObject:(UIImage *)image{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:THThumbnailCreatedNotification object:image];
+    });
+}
+
+#pragma mark - 录制视频
+//开始录制视频
+- (void)startRecording{
+    if ([self isRecording]==NO) {
+        //获取当前视频捕捉链接信息,用于捕捉视频数据配置一些核心属性
+        AVCaptureConnection * videoConnection = [self.movieOutput connectionWithMediaType:AVMediaTypeVideo];
+        //判断是否支持设置videoOrientation
+        if ([videoConnection isVideoOrientationSupported]) {
+            videoConnection.videoOrientation = [self currentVideoOrientation];
+        }
+        
+        //判断是够支持视频稳定,可以显著提高视屏质量
+        if ([videoConnection isVideoOrientationSupported]) {
+            //开启视频防抖模式
+#ifndef NSFoundationVersionNumber_iOS_8_0
+            //在8.0开始舍弃
+            videoConnection.enablesVideoStabilizationWhenAvailable = YES;
+#else
+            videoConnection.preferredVideoStabilizationMode = AVCaptureVideoStabilizationModeCinematic;
+#endif
+        }
+        
+        AVCaptureDevice * device = [self activeCamera];
+        //摄像头可以进行平滑对焦模式操作,即减慢摄像头镜头对焦速度,当用户移动拍摄时摄像头会尝试快速自动对焦
+        if (device.isSmoothAutoFocusEnabled) {
+            NSError * error;
+            if ([device lockForConfiguration:&error]) {
+                device.smoothAutoFocusEnabled = YES;
+                [device unlockForConfiguration];
+            }else{
+                if ([self.delegate respondsToSelector:@selector(deviceConfigurationFailedWithError:)]) {
+                    [self.delegate deviceConfigurationFailedWithError:error];
+                }
+            }
+        }
+        
+        self.outputURL = [self uniqueURL];
+        
+        //在捕捉输出上调用方法
+        //参数1:录制保存路径
+        //参数2:代理
+        [self.movieOutput startRecordingToOutputFileURL:self.outputURL recordingDelegate:self];
+        
+    }
+}
+
+//停止录制视频
+- (void)stopRecording{
+    if (self.isRecording) {
+        [self.movieOutput stopRecording];
+    }
+}
+
+//获取录制状态
+- (BOOL)isRecording{
+    return self.movieOutput.isRecording;
+}
+
+//录制时间
+- (CMTime)recordedDuration{
+    return self.movieOutput.recordedDuration;
+}
+
+- (NSURL *)uniqueURL {
+    NSString * path = [[NSFileManager defaultManager] temporaryDirectoryWithTemplateString:@"kamera.zk"];
+    if (path) {
+        NSString * filePath = [path stringByAppendingString:@"movie.mov"];
+        return [NSURL URLWithString:filePath];
+    }
+    return nil;
+}
+
+#pragma mark - AVCaptureFileOutputRecordingDelegate
+//开始录制
+- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didStartRecordingToOutputFileAtURL:(NSURL *)fileURL fromConnections:(NSArray *)connections {
+    
+}
+
+//录制结束
+- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error {
+    if (!error) {
+        //写入
+        [self writeVideoToAssetsLibrary:[self outputURL]];
+    }else{
+        //错误
+        if ([self.delegate respondsToSelector:@selector(mediaCaptureFailedWithError:)]) {
+            [self.delegate mediaCaptureFailedWithError:error];
+        }
+    }
+    self.outputURL = nil;
+}
+
+#pragma mark - 写入捕捉到的视频
+//写入捕捉到的视频
+- (void)writeVideoToAssetsLibrary:(NSURL *)videoURL{
+    [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+        
+    } completionHandler:^(BOOL success, NSError * _Nullable error) {
+        
+    }];
+}
+
+//获取视频左下脚的缩略图
+- (void)generateThumbnailForVideoAtURL:(NSURL *)videoURL{
+
 }
 
 @end

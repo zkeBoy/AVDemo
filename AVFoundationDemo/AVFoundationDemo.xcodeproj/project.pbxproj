@@ -11,6 +11,9 @@
 		2D1AA3F31F1F55B000C50656 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D1AA3F21F1F55B000C50656 /* ViewController.m */; };
 		2D1AA3F61F1F569D00C50656 /* ZKPreviewView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D1AA3F51F1F569D00C50656 /* ZKPreviewView.m */; };
 		2D1AA3F91F1F5CDD00C50656 /* ZKCameraView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D1AA3F81F1F5CDD00C50656 /* ZKCameraView.m */; };
+		2D2754491F26FB130091DD72 /* NSFileManager+THAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D2754441F26FB130091DD72 /* NSFileManager+THAdditions.m */; };
+		2D27544A1F26FB130091DD72 /* NSTimer+Additions.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D2754461F26FB130091DD72 /* NSTimer+Additions.m */; };
+		2D27544B1F26FB130091DD72 /* UIView+THAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D2754481F26FB130091DD72 /* UIView+THAdditions.m */; };
 		2DA2F4341F1CA40700382D1B /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 2DA2F4331F1CA40700382D1B /* main.m */; };
 		2DA2F4371F1CA40800382D1B /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 2DA2F4361F1CA40800382D1B /* AppDelegate.m */; };
 		2DA2F43D1F1CA40800382D1B /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2DA2F43B1F1CA40800382D1B /* Main.storyboard */; };
@@ -30,6 +33,12 @@
 		2D1AA3F51F1F569D00C50656 /* ZKPreviewView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ZKPreviewView.m; sourceTree = "<group>"; };
 		2D1AA3F71F1F5CDD00C50656 /* ZKCameraView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ZKCameraView.h; sourceTree = "<group>"; };
 		2D1AA3F81F1F5CDD00C50656 /* ZKCameraView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ZKCameraView.m; sourceTree = "<group>"; };
+		2D2754431F26FB130091DD72 /* NSFileManager+THAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSFileManager+THAdditions.h"; sourceTree = "<group>"; };
+		2D2754441F26FB130091DD72 /* NSFileManager+THAdditions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSFileManager+THAdditions.m"; sourceTree = "<group>"; };
+		2D2754451F26FB130091DD72 /* NSTimer+Additions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSTimer+Additions.h"; sourceTree = "<group>"; };
+		2D2754461F26FB130091DD72 /* NSTimer+Additions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSTimer+Additions.m"; sourceTree = "<group>"; };
+		2D2754471F26FB130091DD72 /* UIView+THAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "UIView+THAdditions.h"; sourceTree = "<group>"; };
+		2D2754481F26FB130091DD72 /* UIView+THAdditions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIView+THAdditions.m"; sourceTree = "<group>"; };
 		2DA2F42F1F1CA40700382D1B /* AVFoundationDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AVFoundationDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DA2F4331F1CA40700382D1B /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		2DA2F4351F1CA40800382D1B /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
@@ -82,6 +91,19 @@
 			path = ViewController;
 			sourceTree = "<group>";
 		};
+		2D2754421F26F96E0091DD72 /* Categories */ = {
+			isa = PBXGroup;
+			children = (
+				2D2754431F26FB130091DD72 /* NSFileManager+THAdditions.h */,
+				2D2754441F26FB130091DD72 /* NSFileManager+THAdditions.m */,
+				2D2754451F26FB130091DD72 /* NSTimer+Additions.h */,
+				2D2754461F26FB130091DD72 /* NSTimer+Additions.m */,
+				2D2754471F26FB130091DD72 /* UIView+THAdditions.h */,
+				2D2754481F26FB130091DD72 /* UIView+THAdditions.m */,
+			);
+			path = Categories;
+			sourceTree = "<group>";
+		};
 		2DA2F4261F1CA40700382D1B = {
 			isa = PBXGroup;
 			children = (
@@ -104,8 +126,9 @@
 			isa = PBXGroup;
 			children = (
 				2DA2F4351F1CA40800382D1B /* AppDelegate.h */,
-				2D1AA3F01F1F55B000C50656 /* ViewController */,
 				2DA2F4361F1CA40800382D1B /* AppDelegate.m */,
+				2D2754421F26F96E0091DD72 /* Categories */,
+				2D1AA3F01F1F55B000C50656 /* ViewController */,
 				2D1AA3EB1F1F4CE500C50656 /* Tool */,
 				2D1AA3EF1F1F54DE00C50656 /* Views */,
 				2DA2F43B1F1CA40800382D1B /* Main.storyboard */,
@@ -265,7 +288,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2D2754491F26FB130091DD72 /* NSFileManager+THAdditions.m in Sources */,
 				2DA2F4371F1CA40800382D1B /* AppDelegate.m in Sources */,
+				2D27544A1F26FB130091DD72 /* NSTimer+Additions.m in Sources */,
+				2D27544B1F26FB130091DD72 /* UIView+THAdditions.m in Sources */,
 				2D1AA3F61F1F569D00C50656 /* ZKPreviewView.m in Sources */,
 				2D1AA3F91F1F5CDD00C50656 /* ZKCameraView.m in Sources */,
 				2DA2F4341F1CA40700382D1B /* main.m in Sources */,
