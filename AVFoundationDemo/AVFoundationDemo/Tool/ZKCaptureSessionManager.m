@@ -129,14 +129,18 @@ static const NSString * ThCameraAdjustingExposureContext;
     AVCaptureDeviceInput * videoDeviceInput = [AVCaptureDeviceInput deviceInputWithDevice:videoDevice error:&error];
     
     if (videoDeviceInput) {
-        //开始配置 begin
+        //标注原配置变化开始
         [self.captureSession beginConfiguration];
-        //移除原先的捕捉设备输入
+        
+        //将捕捉会话中的 原捕捉设备移除
         [self.captureSession removeInput:self.activeVideoInput];
+        
+        //判断新的设备能不能加入
         if ([self.captureSession canAddInput:videoDeviceInput ]) {
             [self.captureSession addInput:videoDeviceInput];
             self.activeVideoInput = videoDeviceInput;
-        }else{//重新添加进去
+        }else{
+            //重新添加进去
             [self.captureSession addInput:self.activeVideoInput];
         }
         //完成配置 commit
@@ -441,14 +445,13 @@ static const NSString * ThCameraAdjustingExposureContext;
             videoConnection.videoOrientation = [self currentVideoOrientation];
         }
         
-        //判断是够支持视频稳定,可以显著提高视屏质量
+        //判断是否支持视频稳定,可以显著提高视屏质量
         if ([videoConnection isVideoOrientationSupported]) {
             //开启视频防抖模式
-#ifndef NSFoundationVersionNumber_iOS_8_0
-            //在8.0开始舍弃
-            videoConnection.enablesVideoStabilizationWhenAvailable = YES;
-#else
+#ifdef NSFoundationVersionNumber_iOS_8_0
             videoConnection.preferredVideoStabilizationMode = AVCaptureVideoStabilizationModeCinematic;
+#else
+            videoConnection.enablesVideoStabilizationWhenAvailable = YES;
 #endif
         }
         
@@ -456,6 +459,7 @@ static const NSString * ThCameraAdjustingExposureContext;
         //摄像头可以进行平滑对焦模式操作,即减慢摄像头镜头对焦速度,当用户移动拍摄时摄像头会尝试快速自动对焦
         if (device.isSmoothAutoFocusEnabled) {
             NSError * error;
+            //先锁定设备 防止其他应用来抢占设备资源
             if ([device lockForConfiguration:&error]) {
                 device.smoothAutoFocusEnabled = YES;
                 [device unlockForConfiguration];
@@ -471,8 +475,7 @@ static const NSString * ThCameraAdjustingExposureContext;
         //在捕捉输出上调用方法
         //参数1:录制保存路径
         //参数2:代理
-        [self.movieOutput startRecordingToOutputFileURL:self.outputURL recordingDelegate:self];
-        
+        [self.movieOutput startRecordingToOutputFileURL:[NSURL fileURLWithPath:[self getVideoFilePath]] recordingDelegate:self];
     }
 }
 
@@ -494,30 +497,51 @@ static const NSString * ThCameraAdjustingExposureContext;
 }
 
 - (NSURL *)uniqueURL {
-    NSString * path = [[NSFileManager defaultManager] temporaryDirectoryWithTemplateString:@"kamera.zk"];
+    /*
+    NSFileManager * manager = [NSFileManager defaultManager];
+    NSString * path = [manager temporaryDirectoryWithTemplateString:@"kamera.xxxxx"];
     if (path) {
-        NSString * filePath = [path stringByAppendingString:@"movie.mov"];
-        return [NSURL URLWithString:filePath];
+        NSString * filePath = [path stringByAppendingPathComponent:@"kamera_movie.mov"];
+        return [NSURL fileURLWithPath:filePath];
+    }*/
+    return [NSURL fileURLWithPath:[self getVideoFilePath]];
+}
+
+- (NSString *)getVideoFilePath{
+    NSString * path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    path = [path stringByAppendingPathComponent:@"videoFolder"];
+    NSFileManager * fileManager = [NSFileManager defaultManager];
+    BOOL isDir = NO;
+    BOOL isExist = [fileManager fileExistsAtPath:path isDirectory:&isDir];
+    if (!(isExist&&isDir)) {
+        BOOL create = [fileManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
+        if (create) {
+            NSLog(@"create success!!!");
+        }
     }
-    return nil;
+    NSDateFormatter * d = [[NSDateFormatter alloc] init];
+    d.dateFormat = @"yyyyMMddHHmmss";
+    NSString * time = [d stringFromDate:[NSDate dateWithTimeIntervalSinceNow:0]];
+    NSString * fileName = [[path stringByAppendingPathComponent:time] stringByAppendingString:@".mov"];
+    return fileName;
 }
 
 #pragma mark - AVCaptureFileOutputRecordingDelegate
 //开始录制
 - (void)captureOutput:(AVCaptureFileOutput *)captureOutput didStartRecordingToOutputFileAtURL:(NSURL *)fileURL fromConnections:(NSArray *)connections {
-    
+    NSLog(@"开始录制...");
 }
 
 //录制结束
 - (void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error {
-    if (!error) {
-        //写入
-        [self writeVideoToAssetsLibrary:[self outputURL]];
-    }else{
+    if (error) {
         //错误
         if ([self.delegate respondsToSelector:@selector(mediaCaptureFailedWithError:)]) {
             [self.delegate mediaCaptureFailedWithError:error];
         }
+    }else{
+        //写入
+        [self writeVideoToAssetsLibrary:[self outputURL]];
     }
     self.outputURL = nil;
 }
@@ -525,16 +549,51 @@ static const NSString * ThCameraAdjustingExposureContext;
 #pragma mark - 写入捕捉到的视频
 //写入捕捉到的视频
 - (void)writeVideoToAssetsLibrary:(NSURL *)videoURL{
+#ifdef NSFoundationVersionNumber_iOS_8_0
     [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
-        
+        [PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:videoURL];
     } completionHandler:^(BOOL success, NSError * _Nullable error) {
-        
+        if (success) {
+            //用于界面展示的视屏缩略图
+            [self generateThumbnailForVideoAtURL:videoURL];
+        }else{
+            if ([self.delegate respondsToSelector:@selector(assetLibraryWriteFailedWithError:)]) {
+                [self.delegate assetLibraryWriteFailedWithError:error];
+            }
+        }
     }];
+#else
+    ALAssetsLibrary * library = [[ALAssetsLibrary alloc] init];
+    //写入资源库之前,检查视屏是否可以被写入
+    if ([library videoAtPathIsCompatibleWithSavedPhotosAlbum:videoURL]) {
+        [library writeVideoAtPathToSavedPhotosAlbum:videoURL completionBlock:^(NSURL *assetURL, NSError *error) {
+            if(!error){
+                [self generateThumbnailForVideoAtURL:videoURL];
+            }else{
+                if ([self.delegate respondsToSelector:@selector(assetLibraryWriteFailedWithError:)]) {
+                    [self.delegate assetLibraryWriteFailedWithError:error];
+                }
+            }
+        }];
+    }
+#endif
 }
 
 //获取视频左下脚的缩略图
 - (void)generateThumbnailForVideoAtURL:(NSURL *)videoURL{
-
+    dispatch_async(self.videoQueue, ^{
+        AVAsset * asset = [AVAsset assetWithURL:videoURL];
+        AVAssetImageGenerator * imageGenerator = [AVAssetImageGenerator assetImageGeneratorWithAsset:asset];
+        //设置宽度为100 高度为0 根据视屏的宽高比来计算图片的高度
+        imageGenerator.maximumSize = CGSizeMake(100.0f, .0f);
+        //捕捉视频缩略图绘考虑视频的变化(如视频的方向变化)如果不设置 缩略图的方法有可能出错
+        imageGenerator.appliesPreferredTrackTransform = YES;
+        //获取CGImageRef图片 注意需要自己管理内存,获取指定时间的图片
+        CGImageRef imageRef = [imageGenerator copyCGImageAtTime:kCMTimeZero actualTime:NULL error:nil];
+        UIImage * image = [UIImage imageWithCGImage:imageRef];
+        CGImageRelease(imageRef);
+        [self postNotifictionWithObject:image];
+    });
 }
 
 @end
